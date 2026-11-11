@@ -1,0 +1,16 @@
+.venv/
+.tools/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.env
+data/
+*.sqlite3*
+dist/
+test-results/
+.superpowers/
+*.egg-info/
+
+.tmp-tests*/
+
+.*-output.txt

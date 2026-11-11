@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hookrouty"
+version = "0.1.0"
+description = "A small, synchronous webhook proxy with user management and safe monitoring."
+requires-python = ">=3.13,<3.15"
+dependencies = [
+  "fastapi>=0.115,<1", "uvicorn>=0.34,<1", "jinja2>=3.1.6,<4",
+  "httpx>=0.28,<1", "aiosqlite>=0.21,<1", "pydantic-settings>=2.8,<3",
+  "argon2-cffi>=23.1,<26", "cryptography>=44,<50", "python-multipart>=0.0.20,<1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-asyncio>=0.25,<2", "ruff>=0.11,<1", "playwright>=1.51,<2"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = ["container: requires Docker and HOOKROUTY_IMAGE", "e2e: requires a running server and Chromium"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hookrouty"]
+
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

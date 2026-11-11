@@ -1,0 +1,10 @@
+CREATE TABLE users(id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE, password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('admin','user')), active INTEGER NOT NULL DEFAULT 1, auth_version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
+CREATE TABLE sessions(token_digest TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id), auth_version INTEGER, csrf_token TEXT NOT NULL, expires_at TEXT NOT NULL);
+CREATE INDEX sessions_expiry ON sessions(expires_at);
+CREATE TABLE hooks(id TEXT PRIMARY KEY, name TEXT NOT NULL, enabled INTEGER NOT NULL, input_method TEXT NOT NULL, input_path TEXT NOT NULL, token_hash TEXT, config_json TEXT, created_by TEXT REFERENCES users(id), deleted_at TEXT);
+CREATE TABLE hook_members(hook_id TEXT REFERENCES hooks(id), user_id TEXT REFERENCES users(id), PRIMARY KEY(hook_id,user_id));
+CREATE TABLE executions(request_id TEXT PRIMARY KEY, hook_id TEXT REFERENCES hooks(id), hook_name_snapshot TEXT NOT NULL, source TEXT NOT NULL, attempted_target INTEGER NOT NULL DEFAULT 0, started_at TEXT NOT NULL, finished_at TEXT, outcome TEXT NOT NULL, upstream_status INTEGER, duration_ms REAL, safe_snapshot TEXT NOT NULL);
+CREATE INDEX execution_time ON executions(started_at);
+CREATE INDEX execution_hook ON executions(hook_id,started_at);
+CREATE TABLE aggregate_counters(bucket_start TEXT NOT NULL, kind TEXT NOT NULL, count INTEGER NOT NULL, PRIMARY KEY(bucket_start,kind));
+CREATE TABLE app_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);

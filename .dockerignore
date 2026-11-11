@@ -1,0 +1,16 @@
+.git
+.venv
+.tools
+.tmp-tests
+.superpowers
+.env
+__pycache__
+.pytest_cache
+.ruff_cache
+data
+*.sqlite3*
+*.txt
+test-results
+docs
+tests
+.github
