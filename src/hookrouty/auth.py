@@ -10,6 +10,7 @@ from .models import Principal, RouterError
 from .security import future, hash_password, new_token, now, verify_password
 
 COOKIE = "hookrouty_session"
+MAX_ANONYMOUS_SESSIONS = 1000
 
 
 async def session(request: Request):
@@ -43,16 +44,30 @@ async def require_csrf(request):
 
 async def new_session(request, response, user=None):
     token, csrf = new_token(), new_token()
-    await request.app.state.db.execute(
-        "INSERT INTO sessions VALUES(?,?,?,?,?)",
-        (
-            request.app.state.box.session_digest(token),
-            user["id"] if user else None,
-            user["auth_version"] if user else None,
-            csrf,
-            future(86400 if user else 900),
-        ),
-    )
+    async with request.app.state.db.transaction() as connection:
+        if user is None:
+            await connection.execute(
+                "DELETE FROM sessions WHERE user_id IS NULL AND expires_at<=?", (now(),)
+            )
+            async with connection.execute(
+                "SELECT COUNT(*) FROM sessions WHERE user_id IS NULL"
+            ) as cursor:
+                if (await cursor.fetchone())[0] >= MAX_ANONYMOUS_SESSIONS:
+                    raise RouterError(
+                        429,
+                        "SESSION_CAPACITY_EXCEEDED",
+                        "Anonymous session capacity is full. Try again later.",
+                    )
+        await connection.execute(
+            "INSERT INTO sessions VALUES(?,?,?,?,?)",
+            (
+                request.app.state.box.session_digest(token),
+                user["id"] if user else None,
+                user["auth_version"] if user else None,
+                csrf,
+                future(86400 if user else 900),
+            ),
+        )
     response.set_cookie(
         COOKIE,
         token,

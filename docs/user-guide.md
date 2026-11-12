@@ -40,7 +40,7 @@ Body modes:
 | `text` | UTF-8 text with scalar substitutions |
 | `json` | Structured JSON template with safe serialization |
 
-A standalone JSON string `"{{body.enabled}}"` becomes a JSON boolean when the source is boolean. Embedded `"Enabled: {{body.enabled}}"` becomes text. Objects/arrays are allowed as standalone JSON references, but cannot be automatically embedded into text. Only explicitly configured headers are sent, plus HTTP protocol defaults; incoming authorization and webhook tokens are never automatically forwarded.
+A standalone JSON string `"{{body.enabled}}"` becomes a JSON boolean when the source is boolean. Embedded `"Enabled: {{body.enabled}}"` becomes text. Objects/arrays are allowed as standalone JSON references, but cannot be automatically embedded into text. Completed dot-only URL path segments are encoded after composition, including segments assembled from fixed text and empty/adjacent substitutions. Only explicitly configured headers are sent, plus HTTP protocol defaults; incoming authorization and webhook tokens are never automatically forwarded.
 
 ## Secrets
 
@@ -59,3 +59,7 @@ Filter by hook, last 24 hours/7 days, outcome and source. Lists paginate 25 reco
 Outcomes: `running`, `success` (2xx), `redirected` (3xx), `upstream_error` (4xx/5xx), `rejected` (local validation/auth/capacity), `proxy_error`, `timeout`, `client_disconnected`, `interrupted`. Success rate uses completed destination attempts; local rejection, running and uncertain interrupted/disconnected calls are excluded. Timeouts and connection failures after the attempt count as failed attempts. Unknown public paths increment an administrator-only daily counter instead of individual execution rows.
 
 Capture is off by default. When enabled, incoming, rendered and response text/JSON bodies are masked before truncation, with a default 16 KiB per body. Binary, encrypted secret and compressed bodies are omitted with a reason. History truncation never truncates the caller's response. Execution detail shows `uncertain_result` when no reliable remote outcome was obtained. No outcome causes an automatic retry.
+
+## Browser behavior of public hooks
+
+Webhook calls preserve destination status and body bytes. When an upstream HTML document is opened in a browser, Hookrouty enforces a script-free sandbox with an opaque origin. Scripts, forms and embedded resource loads are disabled, and upstream CSP/reporting headers cannot opt out. This prevents public hook content from accessing the administration session. Use the management Test page to inspect safe results; hook responses are intended as HTTP integration payloads rather than hosted web applications.

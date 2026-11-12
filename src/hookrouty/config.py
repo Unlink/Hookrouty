@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     max_inflight_requests: int = Field(20, gt=0)
     max_request_body_bytes: int = Field(1048576, gt=0)
+    max_management_body_bytes: int = Field(1048576, gt=0)
     max_rendered_body_bytes: int = Field(1048576, gt=0)
     max_upstream_response_bytes: int = Field(8388608, gt=0)
     history_capture_bytes: int = Field(16384, gt=0)

@@ -1,5 +1,5 @@
 import json
-from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, quote_plus, urlencode, urlsplit, urlunsplit
 
 from .templating import SENSITIVE
 
@@ -56,10 +56,10 @@ def capture(
         elif refs:
             # Structured secrets cannot safely be removed from arbitrary text.
             return {"omitted": "sensitive_text"}
-    except (UnicodeError, ValueError):
+        text = scrub_known(text, known_values)
+        data = text.encode()
+    except (UnicodeError, ValueError, RecursionError):
         return {"omitted": "invalid_text"}
-    text = scrub_known(text, known_values)
-    data = text.encode()
     return {"text": data[:limit].decode("utf-8", errors="ignore"), "truncated": len(data) > limit}
 
 
@@ -89,7 +89,12 @@ def scrub_known(value, known_values):
         for secret in sorted(set(known_values), key=len, reverse=True):
             if secret:
                 value = value.replace(secret, REDACTED)
-                value = value.replace(quote(secret, safe=""), REDACTED)
+                try:
+                    variants = {quote(secret, safe=""), quote_plus(secret, safe="")}
+                except UnicodeError:
+                    variants = set()
+                for encoded in sorted(variants, key=len, reverse=True):
+                    value = value.replace(encoded, REDACTED)
                 escaped = json.dumps(secret, ensure_ascii=False)[1:-1]
                 if escaped != secret:
                     value = value.replace(escaped, REDACTED)
@@ -108,16 +113,19 @@ def known_secrets(context, rendered, spec=None):
     values = set()
 
     def collect(value):
-        if isinstance(value, str) and value:
-            values.add(value)
-            if value.lower().startswith(("bearer ", "basic ")):
-                values.add(value.split(" ", 1)[1])
-        elif isinstance(value, dict):
-            for child in value.values():
-                collect(child)
-        elif isinstance(value, list):
-            for child in value:
-                collect(child)
+        pending = [value]
+        while pending:
+            item = pending.pop()
+            if isinstance(item, str) and item:
+                values.add(item)
+                if item.lower().startswith(("bearer ", "basic ")):
+                    values.add(item.split(" ", 1)[1])
+            elif isinstance(item, (bool, int, float)):
+                values.add(json.dumps(item))
+            elif isinstance(item, dict):
+                pending.extend(item.values())
+            elif isinstance(item, list):
+                pending.extend(item)
 
     for ref in context.secret_refs:
         try:
@@ -134,6 +142,6 @@ def known_secrets(context, rendered, spec=None):
     if "body" in rendered.secret_fields:
         try:
             collect(json.loads(rendered.body))
-        except (ValueError, UnicodeError):
+        except (ValueError, UnicodeError, RecursionError):
             collect(rendered.body.decode("utf-8", errors="ignore"))
     return values

@@ -134,6 +134,16 @@ def test_container_roundtrip_restart_backup_and_recovery(tmp_path):
             }
             created = client.post("/api/hooks", json=spec).json()
             hid, token = created["id"], created["token"]
+            assert client.post("/api/hooks", content=b"x" * 1048577).status_code == 413
+            for _ in range(2):
+                malformed = client.post(
+                    "/hooks/demo/example",
+                    headers={"X-Webhook-Token": token, "Content-Type": "application/json"},
+                    content=b'{"value":"\\ud800"}',
+                )
+                assert malformed.status_code == 201
+                assert "sandbox" in malformed.headers["content-security-policy"]
+
             result = client.post(
                 "/hooks/demo/example",
                 headers={"X-Webhook-Token": token, "Content-Type": "application/json"},

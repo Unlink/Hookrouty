@@ -1,5 +1,7 @@
 # Implementation status
 
+This file records the initial delivery. See [security remediation](security-remediation.md) for the current fixes and verification on 12 November 2026.
+
 Source specification: [implementation-plan.md](implementation-plan.md). The supplied source content is preserved; trailing whitespace is normalized. All authored UI, code and documentation are English. Verification date: 11 November 2026.
 
 ## Delivered scope
@@ -47,7 +49,7 @@ Other regression discoveries fixed during implementation: case-insensitive custo
 - Ruling: use one coherent initial implementation commit instead of nine intermediate commits, to keep this empty-project delivery economical. Tradeoff: coarser initial history.
 - Ruling: v0.1 is the first database schema. Reopening/migration idempotence and backup restoration are verified; there is no genuine older application version to upgrade from. Future migrations need previous-version fixtures.
 - Actual GitHub-hosted CI and GHCR publication have not been run because no remote repository is configured. The workflows are ready to run after push/release. No image or code was pushed externally.
-- Review minor (deferred): admission capacity follows MAX_INFLIGHT_REQUESTS, but the explicitly constructed HTTPX transport retains its default connection-pool size (100). Values above 100 can wait inside HTTPX's pool within the total deadline. The default admission limit of 20 is unaffected. Use default-sized deployments until changing this advanced setting is accompanied by pool tuning.
+- Initial review minor (resolved by the security remediation): admission capacity follows MAX_INFLIGHT_REQUESTS, but the explicitly constructed HTTPX transport retains its default connection-pool size (100). Values above 100 can wait inside HTTPX's pool within the total deadline. The default admission limit of 20 is unaffected. Use default-sized deployments until changing this advanced setting is accompanied by pool tuning.
 
 The review set aside in-progress documentation and actual GitHub execution; documentation is now complete, while the external execution limitation remains explicit above. The reviewer did not rerun already verified browser/container suites; those were rerun by the implementer on the final image.
 

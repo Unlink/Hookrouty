@@ -64,6 +64,7 @@ The caller waits for the destination response. HTTP 4xx/5xx responses are forwar
 - [Operations](docs/operations.md): environment, HTTPS, backup, restore, recovery and upgrades.
 - [Architecture and security](docs/architecture.md): routing, execution lifecycle, storage and trust boundaries.
 - [Development and releases](docs/development.md): tests, Docker builds and GitHub Actions publishing.
+- [Security remediation](docs/security-remediation.md): audit findings, fixes and regression coverage.
 - [Implementation status](docs/implementation-status.md): verification evidence and decisions.
 - [Original implementation specification](docs/implementation-plan.md): supplied Slovak source document, preserved for traceability.
 

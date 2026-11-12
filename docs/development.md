@@ -2,7 +2,9 @@
 
 ## Toolchain
 
-Use Python 3.13 and uv 0.13.7. Dependency versions and distribution hashes are locked in uv.lock. Do not regenerate locks during a container build. The project uses a src layout, Hatch packaging and packaged Jinja/static/migration assets. The non-root runtime image includes only production dependencies; the build stage installs uv and compiles the environment.
+Use Python 3.13 and uv 0.13.7. Dependency versions and distribution hashes are locked in uv.lock. Do not regenerate locks during a container build. The project uses a src layout, Hatch packaging and packaged Jinja/static/migration assets. GitHub Actions are pinned to full commit SHAs; Docker base images, uv and the Dockerfile frontend are pinned to multi-platform manifest digests. Hatchling and its build dependencies have exact build-system requirements. Pins were verified against upstream refs on 12 November 2026. Update them deliberately: resolve the intended release ref/digest, review upstream changes, refresh uv.lock, then rerun both architecture builds and regression suites.
+
+The non-root runtime image includes only production dependencies; the build stage installs uv and compiles the environment.
 
 ```bash
 uv sync --locked --python 3.13

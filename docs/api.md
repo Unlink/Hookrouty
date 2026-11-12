@@ -8,6 +8,8 @@ The same API powers the browser UI. Base prefix: `/api`. Requests and responses 
 2. `POST /api/login` with `{"username":"admin","password":"..."}` and `X-CSRF-Token`. Login rotates the session cookie and CSRF token. Read the new token from the response.
 3. Send the cookie and `X-CSRF-Token` on every mutation, including logout, previews and tests. Reads require the cookie. Sessions expire after 24 hours; cookies are HttpOnly, SameSite=Lax and Secure when APP_URL uses HTTPS.
 
+Management request bodies are capped by MAX_MANAGEMENT_BODY_BYTES (default 1 MiB) before parsing, for authenticated and anonymous callers. The cap checks actual streamed bytes even with a misleading/missing Content-Length. Oversize returns 413; a fixed 15-second body-read deadline returns 408 REQUEST_BODY_TIMEOUT. New anonymous session issuance returns 429 SESSION_CAPACITY_EXCEEDED with Retry-After when 1000 unexpired anonymous sessions already exist; existing sessions remain valid.
+
 CSRF protection also applies to login. Authentication failures are generic. Five failures per 15 minutes, tracked independently by username and client IP, cause 429 with `Retry-After: 900`. Proxy-forwarded IP headers are not trusted by the runtime.
 
 ## Endpoints
@@ -107,4 +109,4 @@ Local router errors use this safe shape, never raw exceptions:
 | 503 | STORAGE_UNAVAILABLE | Initial execution could not be committed; target not contacted |
 | 504 | UPSTREAM_TIMEOUT | Total network deadline expired; no retry |
 
-Every public HEAD response has no body. If final history storage fails after a destination response, the real response is returned with `X-Hookrouty-History-Status: unavailable`. The request is never retried. A later maintenance pass marks orphaned running records interrupted.
+Public hook responses enforce a script-free CSP sandbox with an opaque browser origin; upstream CSP/reporting headers are replaced. The forwarded status and body bytes are preserved. Every public HEAD response has no body. If final history storage fails after a destination response, the real response is returned with `X-Hookrouty-History-Status: unavailable`. The request is never retried. A later maintenance pass marks orphaned running records interrupted.

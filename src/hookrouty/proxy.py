@@ -73,34 +73,35 @@ class ProxyService:
         secrets = known_secrets(context, rendered, spec)
         self.active[rid] = asyncio.current_task()
         start = time.monotonic()
-        snapshot = {
-            "target": rendered_snapshot(
-                rendered, spec, self.state.settings.history_capture_bytes, known_values=secrets
-            ),
-            "incoming": {
-                "path": {
-                    k: "[REDACTED]" if "path." + k in context.secret_refs else v
-                    for k, v in incoming.path.items()
-                },
-                "query": {
-                    k: "[REDACTED]" if "query." + k in context.secret_refs else v
-                    for k, v in context.query.items()
-                },
-                "headers": safe_headers(incoming.headers, context.secret_refs),
-                "body": capture(
-                    incoming.body,
-                    context.headers.get("content-type"),
-                    spec.capture_bodies,
-                    context.secret_refs,
-                    limit=self.state.settings.history_capture_bytes,
-                    known_values=secrets,
-                ),
-            },
-        }
+        snapshot = {}
         outcome, status, reply = "interrupted", None, None
         network_task = disconnect_task = None
         recorded = False
         try:
+            snapshot = {
+                "target": rendered_snapshot(
+                    rendered, spec, self.state.settings.history_capture_bytes, known_values=secrets
+                ),
+                "incoming": {
+                    "path": {
+                        k: "[REDACTED]" if "path." + k in context.secret_refs else v
+                        for k, v in incoming.path.items()
+                    },
+                    "query": {
+                        k: "[REDACTED]" if "query." + k in context.secret_refs else v
+                        for k, v in context.query.items()
+                    },
+                    "headers": safe_headers(incoming.headers, context.secret_refs),
+                    "body": capture(
+                        incoming.body,
+                        context.headers.get("content-type"),
+                        spec.capture_bodies,
+                        context.secret_refs,
+                        limit=self.state.settings.history_capture_bytes,
+                        known_values=secrets,
+                    ),
+                },
+            }
             current = await self.state.db.one(
                 "SELECT enabled,deleted_at FROM hooks WHERE id=?", (hook["id"],)
             )

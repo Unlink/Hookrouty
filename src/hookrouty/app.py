@@ -12,6 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import ClientDisconnect
 
 from .api import router
@@ -19,6 +20,7 @@ from .auth import LoginLimiter, bootstrap_admin
 from .config import Settings
 from .db import Database
 from .history import History
+from .middleware import ManagementBodyLimitMiddleware
 from .models import IncomingRequest, RouterError
 from .proxy import ProxyService
 from .routing import compile_route, resolve_route
@@ -46,7 +48,25 @@ class RequestIdMiddleware:
                     (b"x-content-type-options", b"nosniff"),
                     (b"referrer-policy", b"no-referrer"),
                 ]
-                if not scope["path"].startswith("/hooks/"):
+                if scope["path"].startswith("/hooks/"):
+                    # Upstream documents must never become management-origin code.
+                    reporting = {
+                        b"content-security-policy",
+                        b"content-security-policy-report-only",
+                        b"report-to",
+                        b"reporting-endpoints",
+                        b"nel",
+                    }
+                    message["headers"] = [
+                        (k, v) for k, v in message["headers"] if k.lower() not in reporting
+                    ]
+                    message["headers"].append(
+                        (
+                            b"content-security-policy",
+                            b"sandbox; default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+                        )
+                    )
+                else:
                     message["headers"].append((b"cache-control", b"no-store"))
                     message["headers"].append(
                         (
@@ -84,10 +104,12 @@ def create_app(settings: Settings | None = None):
                 follow_redirects=False,
                 trust_env=False,
                 timeout=None,
-                transport=httpx.AsyncHTTPTransport(retries=0),
-                limits=httpx.Limits(
-                    max_connections=settings.max_inflight_requests,
-                    max_keepalive_connections=settings.max_inflight_requests,
+                transport=httpx.AsyncHTTPTransport(
+                    retries=0,
+                    limits=httpx.Limits(
+                        max_connections=settings.max_inflight_requests,
+                        max_keepalive_connections=settings.max_inflight_requests,
+                    ),
                 ),
             )
             state.history, state.proxy = History(state), ProxyService(state)
@@ -126,6 +148,7 @@ def create_app(settings: Settings | None = None):
         redoc_url=None,
         openapi_url=None,
     )
+    app.add_middleware(ManagementBodyLimitMiddleware, settings=settings)
     app.add_middleware(RequestIdMiddleware)
     app.include_router(router)
     logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -154,6 +177,15 @@ def create_app(settings: Settings | None = None):
             ),
         )
 
+    @app.exception_handler(StarletteHTTPException)
+    async def framework_error(request: Request, error):
+        if error.status_code in {400, 422}:
+            return await router_error(request, RouterError(400, "INVALID_INPUT", "Invalid input."))
+        return JSONResponse(
+            {"detail": error.detail}, status_code=error.status_code, headers=error.headers
+        )
+
+    @app.exception_handler(RecursionError)
     @app.exception_handler(ValueError)
     async def bad_value(request: Request, error):
         return await router_error(request, RouterError(400, "INVALID_INPUT", "Invalid input."))

@@ -14,12 +14,15 @@ Run one Uvicorn worker and one application container per SQLite database. Use a 
 | LOG_LEVEL | INFO | Uvicorn log level; URL access logs are disabled |
 | MAX_INFLIGHT_REQUESTS | 20 | Global destination capacity, no wait queue |
 | MAX_REQUEST_BODY_BYTES | 1048576 | Incoming webhook body limit |
+| MAX_MANAGEMENT_BODY_BYTES | 1048576 | Management API body ceiling, enforced before JSON parsing |
 | MAX_RENDERED_BODY_BYTES | 1048576 | Assembled destination body limit |
 | MAX_UPSTREAM_RESPONSE_BYTES | 8388608 | Destination transfer-byte limit, including encoded responses |
 | HISTORY_CAPTURE_BYTES | 16384 | Maximum stored text preview per body after redaction |
 | HISTORY_RETENTION_DAYS | 7 | Maximum execution age |
 | HISTORY_MAX_RECORDS | 10000 | Maximum completed execution records |
 | SHUTDOWN_GRACE_SECONDS | 30 | Wait for active calls during shutdown |
+
+Management body reception has a fixed 15-second total deadline and returns 408 on timeout. Both declared and actual streamed sizes are checked, including unauthenticated requests. At most 1000 unexpired anonymous sessions may exist globally; existing sessions remain usable, expired rows are reclaimed during issuance, and excess issuance returns 429.
 
 All limits are positive integers. Timeout is per hook, 1–900 seconds, default 60. History cleanup runs every five minutes. Running calls are excluded from retention deletion. Unknown-route counters are daily UTC buckets retained for seven days. Session duration (24h), anonymous duration (15m), login limit (five failures / 15m) and cleanup interval are fixed in v0.1.
 
@@ -98,6 +101,8 @@ The command checks the database key, updates the account password and invalidate
 4. Check health, login, a preview and a controlled roundtrip.
 
 Migrations run before request handling and are recorded in schema_migrations. Startup refuses a mismatched key. v0.1 is the first schema; upgrades currently exercise idempotent reopening rather than a fictional older release. Future schema migrations must include previous-version fixtures. Downgrading an image after a schema change may be incompatible: restore the matching backup into a separate volume for a reliable rollback. Do not rotate APP_SECRET_KEY as an ordinary environment edit; v0.1 has no online secret re-encryption workflow.
-## Advanced concurrency note
+## Concurrency and browser documents
 
-The default 20 concurrent destination calls is fully bounded and tested. If raising MAX_INFLIGHT_REQUESTS above 100, HTTPX's transport currently retains its default connection pool and may wait internally within the total network deadline. Tune the transport pool together with that advanced deployment change; see the deferred minor in [implementation status](implementation-status.md).
+HTTPX connection-pool limits track MAX_INFLIGHT_REQUESTS, including values above 100. Admission remains immediate, with no application queue.
+
+All public hook responses enforce `Content-Security-Policy: sandbox; default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`. Browser-rendered upstream documents have an opaque origin and cannot execute scripts, submit forms or access management-origin storage. Upstream CSP/reporting headers are replaced. Response status/body bytes, Content-Type and ordinary HTTP transfer semantics remain intact. Use a dedicated webhook hostname as additional isolation if your deployment supports it; its reverse proxy must keep `/app`, `/api`, `/login` and management cookies off the webhook origin.

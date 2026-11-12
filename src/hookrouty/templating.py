@@ -48,21 +48,26 @@ def build_context(request, path, secret_refs):
         headers.setdefault(key.lower(), value)
     try:
         body = json.loads(request.body) if request.body else None
-    except (ValueError, UnicodeError):
+    except (ValueError, UnicodeError, RecursionError):
         body = None
     refs = {ref.lower() if ref.startswith("headers.") else ref for ref in secret_refs}
     refs.update("headers." + name for name in headers if name.lower() in SENSITIVE)
     refs.update("query." + name for name in query if name.lower() in SENSITIVE)
 
-    def walk(node, prefix):
+    # Arrays have no index-reference syntax. Mark the enclosing array when any
+    # descendant contains a sensitive key, so whole-array substitutions stay secret.
+    pending = [(body, "body", None)]
+    while pending:
+        node, prefix, array_root = pending.pop()
         if isinstance(node, dict):
             for key, value in node.items():
                 current = prefix + "." + key
                 if key.lower() in SENSITIVE:
-                    refs.add(current)
-                walk(value, current)
+                    refs.add(array_root or current)
+                pending.append((value, current, array_root))
+        elif isinstance(node, list):
+            pending.extend((child, prefix, array_root or prefix) for child in node)
 
-    walk(body, "body")
     return TemplateContext(path, query, headers, body, refs)
 
 
@@ -150,6 +155,12 @@ def render_request(spec, context, original_body, content_type):
     parts = urlsplit(target.url)
     secrets = set()
     path = render_text(parts.path, context, encode=True)
+    # HTTPX removes literal dot segments. Check the composed segment, including
+    # fixed text and adjacent/empty substitutions, before constructing its URL.
+    path = "/".join(
+        segment.replace(".", "%2E") if segment in {".", ".."} else segment
+        for segment in path.split("/")
+    )
     query = [(item.name, render_text(item.value or "", context)) for item in target.query]
     extra_query = urlencode(query)
     url = urlunsplit(

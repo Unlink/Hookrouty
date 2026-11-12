@@ -122,3 +122,70 @@ def test_user_journey(server):
         page.screenshot(path="test-results/hooks-desktop.png", full_page=True)
         assert not errors
         browser.close()
+
+
+def test_public_document_is_script_free_and_has_opaque_origin(server):
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from playwright.sync_api import sync_playwright
+
+    class Document(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Security-Policy", "script-src 'unsafe-inline'")
+            self.end_headers()
+            self.wfile.write(
+                b"<!doctype html><h1>Upstream document</h1><script>window.documentScriptRan=true</script>"
+            )
+
+        def log_message(self, *args):
+            pass
+
+    upstream = ThreadingHTTPServer(("127.0.0.1", 0), Document)
+    thread = threading.Thread(target=upstream.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            context = browser.new_context()
+            session = context.request.get(server + "/api/session").json()
+            signed = context.request.post(
+                server + "/api/login",
+                headers={"X-CSRF-Token": session["csrf_token"]},
+                data={"username": "admin", "password": "initial-password"},
+            ).json()
+            created = context.request.post(
+                server + "/api/hooks",
+                headers={"X-CSRF-Token": signed["csrf_token"]},
+                data={
+                    "name": "Document",
+                    "enabled": True,
+                    "input_method": "GET",
+                    "input_path": "/hooks/document",
+                    "auth": {"mode": "query"},
+                    "target": {
+                        "method": "GET",
+                        "url": "http://127.0.0.1:" + str(upstream.server_port),
+                    },
+                },
+            ).json()
+            page = context.new_page()
+            page.goto(server + "/hooks/document?token=" + created["token"])
+            assert page.get_by_role("heading", name="Upstream document").is_visible()
+            assert page.evaluate("window.documentScriptRan") is None
+            assert page.evaluate("window.origin") == "null"
+            assert (
+                page.evaluate(
+                    "() => {try { return window.localStorage.length; } catch(error) { return error.name; }}"
+                )
+                == "SecurityError"
+            )
+            page.goto(server + "/app/hooks")
+            assert page.get_by_role("heading", name="Your hooks").is_visible()
+            browser.close()
+    finally:
+        upstream.shutdown()
+        upstream.server_close()
+        thread.join(timeout=5)
