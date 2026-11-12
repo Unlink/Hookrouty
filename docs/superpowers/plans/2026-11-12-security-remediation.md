@@ -29,7 +29,9 @@
 ## Ledger
 - Started from clean f10b6f5. No unrelated user changes.
 
-- Completed tasks 1–7 locally: regression failures observed, all fixes green, 79 full tests plus separate arm64 smoke passed, lint/format/Compose passed, and Astra returned no material blocker. Source/runtime build pins were verified upstream; uv.lock remained unchanged after refresh.
+- Completed tasks 1â€“7 locally: regression failures observed, all fixes green, 79 full tests plus separate arm64 smoke passed, lint/format/Compose passed, and Astra returned no material blocker. Source/runtime build pins were verified upstream; uv.lock remained unchanged after refresh.
 - Ruling: enforce CSP sandbox rather than requiring a second hostname, preserving the existing one-container deployment. Browser tests verify opaque origin and script/storage denial; operators can additionally isolate hostnames.
 - Review minor (deferred): per-source anonymous issuance throttling/reserved bootstrap capacity is additional ingress hardening. The global storage budget is implemented; existing sessions are unaffected by a full budget.
 - Integration: commit and push to the previously authorized feature branch after recording this verification. No release, merge or registry push.
+
+- CI correction: normalize this plan from Windows CP1250 to UTF-8/LF after the remote formatting job rejected its en dash. All tracked files were checked for UTF-8 validity.
