@@ -40,19 +40,27 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 
 ## Release and GHCR
 
-The project intentionally does not hard-code an owner or repository because this workspace began without a Git remote. Create/connect your GitHub repository and push the implementation branch using your usual review process. Enable Actions and allow the workflow's GITHUB_TOKEN to write packages. For an organization, ensure package creation is allowed.
+The repository is [Unlink/Hookrouty](https://github.com/Unlink/Hookrouty) and the registry image is `ghcr.io/unlink/hookrouty`. The workflow derives this lowercase name from github.repository, so forks automatically use their own namespace. The MIT license from the repository's original main history is preserved and included in the installed distribution.
 
-`.github/workflows/ci.yml` runs on pushes/pull requests and as a reusable workflow. It verifies locked dependencies, Ruff, unit/integration tests, Chromium, Compose validation and native Docker smoke tests on Ubuntu amd64 and Ubuntu arm64. Pull requests receive read-only repository permissions and never publish images.
+`.github/workflows/ci.yml` verifies feature-branch pushes and pull requests and is also reusable through workflow_call. It checks locked dependencies, Ruff, unit/integration tests, Chromium, Compose and native Docker smoke tests on Ubuntu amd64 and arm64. It excludes main pushes because the publishing workflow invokes the same checks there.
 
-`.github/workflows/publish.yml` runs only when you publish a GitHub release. Use a release tag `vMAJOR.MINOR.PATCH`, optionally with `-prerelease`. It first invokes all CI jobs at that release commit. Only after successful verification does it authenticate to GHCR with the built-in GITHUB_TOKEN and publish an amd64/arm64 manifest, provenance and SBOM.
+`.github/workflows/publish.yml` runs on pushes to main, published GitHub releases and manual workflow_dispatch. Verification always runs before the publishing job. A manual run publishes only when main is selected; a manual feature-branch run cannot push an image. Publication uses packages: write only in the publish job; verification and pull requests keep read-only repository access. Jobs are serialized per Git ref to limit overlapping publication.
 
-- `v0.1.0` → `ghcr.io/<lowercase-owner>/<lowercase-repository>:0.1.0` and `:latest`.
-- `v0.2.0-rc.1` → `:0.2.0-rc.1`; latest is unchanged.
-- A GitHub prerelease flag also prevents a latest update.
+| Trigger | Tags |
+| --- | --- |
+| Push to main or manual run on main | latest and sha-<full-commit-sha> |
+| Stable release v0.1.0 | 0.1.0, latest and sha-<full-commit-sha> |
+| Prerelease v0.2.0-rc.1 | 0.2.0-rc.1 and sha-<full-commit-sha>; latest unchanged |
 
-The login secret is not a custom personal token. GitHub must allow `packages: write` on the publishing job. The first GHCR package may default private; change package visibility if anonymous deployment should work, or sign in with a token allowed to read it. Published packages should be associated with the source repository through the OCI source label. No local Docker build or CI pull-request test pushes a registry image.
+The GitHub prerelease flag also prevents updating latest. Release names must use vMAJOR.MINOR.PATCH with an optional prerelease suffix; invalid tags fail before login/publication. A GitHub release is an explicit operator action; ordinary tag pushes alone do not publish a release image.
 
-These workflows have been inspected locally; their GitHub-hosted execution can only be verified after the repository exists and receives a push/release. The source references used to prepare the workflow are [GitHub publishing documentation](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images), [Docker build-push-action](https://github.com/docker/build-push-action), [Docker login-action](https://github.com/docker/login-action), and [uv Docker integration](https://docs.astral.sh/uv/guides/integration/docker/).
+The workflow uses the existing SHA-pinned Docker actions, verifies both architectures before publication, and builds an amd64/arm64 manifest with provenance and an SBOM. The image name, digest and tags appear in the workflow summary. Source, revision and MIT license OCI labels connect the package to the repository.
+
+Authentication is the built-in GITHUB_TOKEN; no custom personal token or Docker Hub credentials are needed. Repository/organization settings must permit packages: write. A first GHCR package may default private: change package visibility for anonymous pulls, or sign in with a token allowed to read it. Registry visibility and Actions permission restrictions are controlled by the repository/package owner.
+
+Use a version or digest for production upgrades. The latest tag follows successful main publications and stable releases, so it is intentionally mutable. The full commit tag is convenient for identifying the source revision; a digest is the immutable deployment reference.
+
+References: [GitHub publishing documentation](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images), [reusable workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows), [Docker build-push-action](https://github.com/docker/build-push-action).
 
 ## Changes and review
 

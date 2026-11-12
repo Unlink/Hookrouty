@@ -1,15 +1,22 @@
 name: Publish Docker image
 on:
+  push:
+    branches: [main]
+  workflow_dispatch:
   release:
     types: [published]
 permissions:
   contents: read
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   verify:
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
   publish:
+    if: github.event_name == 'release' || github.ref == 'refs/heads/main'
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -25,19 +32,26 @@ jobs:
         shell: bash
         env:
           REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          image="ghcr.io/${REPOSITORY,,}"
+          if [[ "$EVENT_NAME" == release && ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo 'Release tag must be vMAJOR.MINOR.PATCH with an optional prerelease suffix.' >&2
             exit 1
           fi
-          image="ghcr.io/${REPOSITORY,,}"
           printf 'name=%s\n' "$image" >> "$GITHUB_OUTPUT"
           {
             echo 'tags<<EOF'
-            printf '%s:%s\n' "$image" "${RELEASE_TAG#v}"
-            if [[ "$PRERELEASE" == false && "$RELEASE_TAG" != *-* ]]; then
+            printf '%s:sha-%s\n' "$image" "$COMMIT_SHA"
+            if [[ "$EVENT_NAME" == release ]]; then
+              printf '%s:%s\n' "$image" "${RELEASE_TAG#v}"
+              if [[ "$PRERELEASE" == false && "$RELEASE_TAG" != *-* ]]; then
+                printf '%s:latest\n' "$image"
+              fi
+            else
               printf '%s:latest\n' "$image"
             fi
             echo EOF
@@ -49,7 +63,9 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+      - name: Build and publish image
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -57,9 +73,21 @@ jobs:
           tags: ${{ steps.image.outputs.tags }}
           labels: |
             org.opencontainers.image.title=Hookrouty
+            org.opencontainers.image.licenses=MIT
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
           provenance: true
           sbom: true
           cache-from: type=gha,scope=release
           cache-to: type=gha,mode=max,scope=release
+      - name: Report published image
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.image.outputs.tags }}
+        run: |
+          {
+            printf '## Published image\n\n'
+            printf '%s@%s\n\n' "$IMAGE" "$DIGEST"
+            printf 'Tags:\n%s\n' "$TAGS"
+          } >> "$GITHUB_STEP_SUMMARY"

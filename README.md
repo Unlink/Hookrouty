@@ -70,9 +70,17 @@ The caller waits for the destination response. HTTP 4xx/5xx responses are forwar
 
 ## Build and publish
 
-The workflows are ready for a GitHub repository; no image has been published by this local implementation. CI runs lint, unit/integration tests, Chromium and native container smoke tests for amd64 and arm64. Publishing a GitHub release tagged `v0.1.0` triggers verification followed by a multi-platform push to `ghcr.io/<owner>/<repository>:0.1.0`. Stable releases also update `latest`; prereleases do not. Authentication uses `GITHUB_TOKEN` with `packages: write`. See [release setup](docs/development.md#release-and-ghcr).
+GitHub Actions publishes multi-platform images to `ghcr.io/unlink/hookrouty` after all verification jobs pass. Every push to `main` publishes `latest` and `sha-<full-commit-sha>`. Publishing a GitHub release tagged `v0.1.0` additionally publishes `0.1.0`; stable releases update `latest`, while prereleases do not. You can also run **Publish Docker image** manually from the Actions tab with branch `main` selected.
 
-For deployment after a release, set `HOOKROUTY_IMAGE=ghcr.io/<owner>/<repository>:0.1.0`. Prefer a version or immutable digest. No specific repository namespace is hard-coded.
+CI runs lint, unit/integration tests, Chromium, Compose validation and native container smoke tests for amd64 and arm64. Feature pushes and pull requests verify without publication. Main pushes run verification through the publishing workflow, avoiding duplicate CI runs. Authentication uses the built-in `GITHUB_TOKEN` with `packages: write`; no Docker Hub account or custom registry secret is required. See [release setup](docs/development.md#release-and-ghcr).
+
+```bash
+export HOOKROUTY_IMAGE=ghcr.io/unlink/hookrouty:latest
+docker compose pull
+docker compose up -d
+```
+
+Set APP_SECRET_KEY, APP_URL and the first ADMIN_PASSWORD as described above. For reproducible deployments, choose a version, the full `sha-...` tag, or the image digest reported in the publishing job summary. A newly created GHCR package can default to private; make it public in package settings for anonymous pulls, or authenticate with a token that can read the package.
 
 ## Local development
 
