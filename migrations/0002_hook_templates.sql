@@ -1,0 +1,1 @@
+CREATE TABLE hook_templates(id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, definition_json TEXT NOT NULL, enabled INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);

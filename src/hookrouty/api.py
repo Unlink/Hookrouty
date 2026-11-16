@@ -7,6 +7,15 @@ from .models import HookSpec, IncomingRequest, RouterError, UserCreate, UserPatc
 from .redaction import known_secrets, rendered_snapshot, scrub_known
 from .security import new_token, token_digest, verify_password
 from .users import change_password, create_user, require_admin, require_hook_access, update_user
+from .wizard import (
+    WizardDraft,
+    WizardTemplateSpec,
+    prepare_spec,
+    preview_spec,
+    save_template,
+    template_read,
+    template_row,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -324,3 +333,71 @@ async def stats(request: Request):
             request.app.state.db, actor, request.query_params["hook_id"], deleted=True
         )
     return await request.app.state.history.stats(actor, request.query_params)
+
+
+@router.get("/templates")
+async def list_templates(request: Request):
+    actor = await current_principal(request)
+    rows = await request.app.state.db.all(
+        "SELECT * FROM hook_templates"
+        + ("" if actor.role == "admin" else " WHERE enabled=1")
+        + " ORDER BY created_at,name"
+    )
+    return [template_read(row) for row in rows]
+
+
+@router.get("/templates/{tid}")
+async def get_template(tid: str, request: Request):
+    return template_read(
+        await template_row(request.app.state.db, tid, await current_principal(request))
+    )
+
+
+@router.post("/templates", status_code=201)
+async def create_template(request: Request, spec: WizardTemplateSpec):
+    require_admin(await current_principal(request))
+    await require_csrf(request)
+    return await save_template(request.app.state.db, spec)
+
+
+@router.put("/templates/{tid}")
+async def update_template(tid: str, request: Request, spec: WizardTemplateSpec):
+    actor = await current_principal(request)
+    require_admin(actor)
+    await require_csrf(request)
+    await template_row(request.app.state.db, tid, actor)
+    return await save_template(request.app.state.db, spec, tid)
+
+
+@router.delete("/templates/{tid}", status_code=204)
+async def remove_template(tid: str, request: Request):
+    actor = await current_principal(request)
+    require_admin(actor)
+    await require_csrf(request)
+    await template_row(request.app.state.db, tid, actor)
+    await request.app.state.db.execute("DELETE FROM hook_templates WHERE id=?", (tid,))
+    return Response(status_code=204)
+
+
+async def wizard_spec(tid, request, draft):
+    actor = await current_principal(request)
+    await require_csrf(request)
+    row = await template_row(request.app.state.db, tid, actor, usable=True)
+    return actor, prepare_spec(
+        WizardTemplateSpec.model_validate_json(row["definition_json"]), draft
+    )
+
+
+@router.post("/templates/{tid}/preview")
+async def template_preview(tid: str, request: Request, draft: WizardDraft):
+    _, spec = await wizard_spec(tid, request, draft)
+    return {
+        **preview_spec(spec, request.app.state.settings.history_capture_bytes),
+        "input_path": spec.input_path,
+    }
+
+
+@router.post("/templates/{tid}/hooks", status_code=201)
+async def create_from_template(tid: str, request: Request, draft: WizardDraft):
+    actor, spec = await wizard_spec(tid, request, draft)
+    return await save_hook(request.app.state, actor, spec)

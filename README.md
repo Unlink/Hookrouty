@@ -2,6 +2,7 @@
 
 A small, synchronous webhook proxy for a trusted team. Configure incoming routes and one HTTP destination per hook in the browser, then follow requests in a private activity history.
 
+- A three-step setup wizard with dynamically managed Simple HTTP URL, Dockhand and custom templates.
 - Parameterized routes under `/hooks`, with independent webhook tokens.
 - Destination templates using path, query, header and JSON body values.
 - Administrator and member accounts, per-hook assignments, server-side sessions and CSRF protection.
@@ -36,10 +37,16 @@ Open [Hookrouty](http://localhost:8080). Sign in as `admin` with the bootstrap p
 
 The supplied [compose.yaml](compose.yaml) uses a named volume, read-only root filesystem, dropped capabilities and a healthcheck. It binds port 8080 to loopback by default. Set `HOOKROUTY_BIND_ADDRESS=0.0.0.0` for remote access, or connect a reverse proxy to the service. An optional [.env.example](.env.example) documents the deployment inputs; environment variables work without any `.env` file.
 
-## First webhook
+## Quick webhook setup
+
+Select **Hooks → Create hook**, enter a name and choose **Simple HTTP URL** or **Dockhand redeploy**. Fill the destination fields, review the masked request and create the hook. Copy the URL, one-time token or ready-to-use curl. Preview and creation send no destination request. The Dockhand preset starts an asynchronous Compose/Internal-stack redeploy; check completion in Dockhand.
+
+Administrators can add, copy, edit, disable and delete reusable definitions under **Templates**, without rebuilding the container. Existing hooks remain independent of template changes. See [webhook setup templates](docs/webhook-templates.md). The full editor remains available through **Advanced editor**.
+
+## Advanced webhook example
 
 1. In **Users**, an administrator can create accounts. In **Hooks**, any signed-in user can create a hook; its creator receives access automatically.
-2. Choose input method `POST`, route `/hooks/deploy/:project/:environment`, and enable the public endpoint.
+2. Open **Advanced editor**. Choose input method `POST`, route `/hooks/deploy/:project/:environment`, and enable the public endpoint.
 3. Set destination method `POST` and URL `http://deployment-service:8000/apps/{{path.project}}/deploy`.
 4. Add query field `environment` with value `{{path.environment}}`. Add any destination credentials as secret headers.
 5. Select JSON body mode and enter `{"version":"{{query.version}}","force":"{{body.force}}"}`.
@@ -60,6 +67,7 @@ The caller waits for the destination response. HTTP 4xx/5xx responses are forwar
 ## Documentation
 
 - [User guide](docs/user-guide.md): configuration, templates, secret editing, previews and monitoring.
+- [Webhook setup templates](docs/webhook-templates.md): wizard, Dockhand, custom definitions and template API.
 - [API reference](docs/api.md): sessions, CSRF, schemas, endpoint contracts and errors.
 - [Operations](docs/operations.md): environment, HTTPS, backup, restore, recovery and upgrades.
 - [Architecture and security](docs/architecture.md): routing, execution lifecycle, storage and trust boundaries.

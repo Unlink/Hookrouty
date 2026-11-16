@@ -157,6 +157,7 @@ run(async()=>{
   $("#logout")?.addEventListener("click",()=>run(async()=>{await api("/logout",{method:"POST"});location.assign("/login");}));
   bindForm("#login-form",async(form,data)=>{await api("/login",{method:"POST",body:data});location.assign("/app/hooks");});
   bindForm("#password-form",async(form,data)=>{await api("/me/password",{method:"POST",body:data});location.assign("/login");});
+  if(page==="wizard")await wizard();if(page==="templates")await templateAdmin();
   if(page==="hooks")await loadHooks();if(page==="editor")await editor();if(page==="test")await testPage();if(page==="executions")await activity();if(page==="users")await usersPage();
   if(page==="detail"){const result=await api("/executions/"+document.body.dataset.executionId);$("#execution-detail").textContent=JSON.stringify(result,null,2);$("#uncertain").hidden=!result.uncertain_result;}
 });

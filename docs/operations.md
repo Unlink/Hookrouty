@@ -106,3 +106,7 @@ Migrations run before request handling and are recorded in schema_migrations. St
 HTTPX connection-pool limits track MAX_INFLIGHT_REQUESTS, including values above 100. Admission remains immediate, with no application queue.
 
 All public hook responses enforce `Content-Security-Policy: sandbox; default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`. Browser-rendered upstream documents have an opaque origin and cannot execute scripts, submit forms or access management-origin storage. Upstream CSP/reporting headers are replaced. Response status/body bytes, Content-Type and ordinary HTTP transfer semantics remain intact. Use a dedicated webhook hostname as additional isolation if your deployment supports it; its reverse proxy must keep `/app`, `/api`, `/login` and management cookies off the webhook origin.
+
+## Template migration
+
+Version 2 adds `hook_templates` and seeds Simple HTTP URL and Dockhand definitions once. Existing accounts, hooks, tokens and history remain unchanged. Definitions are part of the SQLite database and normal backups. Edited/deleted built-ins remain edited/deleted after restart. Back up before upgrading; a rollback to an older application version requires restoring the matching pre-upgrade backup and APP_SECRET_KEY. No extra service or environment setting is needed.

@@ -28,6 +28,7 @@ def server(tmp_path):
         "APP_SECRET_KEY": base64.urlsafe_b64encode(b"e" * 32).decode(),
         "ADMIN_PASSWORD": "initial-password",
         "DATA_DIR": str(tmp_path),
+        "APP_URL": f"http://127.0.0.1:{port}",
         "PYTHONPATH": str(Path(__file__).parents[2] / "src"),
     }
     process = subprocess.Popen(
@@ -87,6 +88,7 @@ def test_user_journey(server):
         page.get_by_role("button", name="Sign in", exact=True).click()
         page.wait_for_url("**/app/hooks")
         page.get_by_role("link", name="+ Create hook", exact=True).click()
+        page.get_by_role("link", name="Advanced editor", exact=True).click()
         page.get_by_label("Name", exact=True).fill("<script>window.xss=1</script>")
         page.get_by_label("Route", exact=True).fill("/hooks/demo/:project")
         page.get_by_label("HTTP(S) URL", exact=True).fill("http://127.0.0.1:1/{{path.project}}")
@@ -189,3 +191,163 @@ def test_public_document_is_script_free_and_has_opaque_origin(server):
         upstream.shutdown()
         upstream.server_close()
         thread.join(timeout=5)
+
+
+def wizard_login(context, server):
+    session = context.request.get(server + "/api/session").json()
+    signed = context.request.post(
+        server + "/api/login",
+        headers={"X-CSRF-Token": session["csrf_token"]},
+        data={"username": "admin", "password": "initial-password"},
+    )
+    assert signed.ok
+
+
+def test_simple_wizard_copy_and_real_call(server):
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from playwright.sync_api import sync_playwright
+
+    calls = []
+
+    class Destination(BaseHTTPRequestHandler):
+        def do_POST(self):
+            calls.append(dict(self.headers))
+            self.send_response(204)
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    upstream = ThreadingHTTPServer(("127.0.0.1", 0), Destination)
+    thread = threading.Thread(target=upstream.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            context = browser.new_context(
+                viewport={"width": 390, "height": 844},
+                permissions=["clipboard-read", "clipboard-write"],
+            )
+            wizard_login(context, server)
+            page = context.new_page()
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.goto(server + "/app/hooks/new")
+            page.get_by_label("Webhook name", exact=True).fill("Simple call")
+            page.get_by_label("Template", exact=True).select_option("simple-http-url")
+            page.get_by_role("button", name="Continue", exact=True).click()
+            page.get_by_label("Destination URL", exact=True).fill(
+                "http://127.0.0.1:" + str(upstream.server_port)
+            )
+            page.get_by_label("Bearer token (optional)", exact=True).fill("destination-private")
+            page.get_by_role("button", name="Continue", exact=True).click()
+            page.locator("#wizard-destination").filter(has_text="POST").wait_for()
+            assert "destination-private" not in page.locator("#wizard-preview").text_content()
+            assert not calls
+            page.get_by_role("button", name="Back", exact=True).click()
+            assert (
+                page.get_by_label("Bearer token (optional)").input_value() == "destination-private"
+            )
+            page.get_by_role("button", name="Continue", exact=True).click()
+            page.get_by_label("Caller authentication").select_option("query")
+            page.get_by_role("button", name="Create webhook", exact=True).click()
+            page.locator("#wizard-result").wait_for(state="visible")
+            url = page.get_by_label("Webhook URL", exact=True).input_value()
+            token = page.get_by_label("Webhook token", exact=True).input_value()
+            assert url.startswith(server + "/hooks/simple-call-") and "?token=" in url
+            assert not calls
+            page.get_by_role("button", name="Copy URL", exact=True).click()
+            page.wait_for_function(
+                "navigator.clipboard.readText().then(value => value.includes('?token='))"
+            )
+            assert page.evaluate("navigator.clipboard.readText()") == url
+            page.evaluate(
+                "window.savedClipboard = navigator.clipboard; Object.defineProperty(navigator, 'clipboard', {value: undefined, configurable: true})"
+            )
+            page.get_by_role("button", name="Copy token", exact=True).click()
+            page.get_by_role("status").filter(has_text="Copied.").wait_for()
+            assert page.evaluate("window.savedClipboard.readText()") == token
+            assert page.get_by_label("Webhook token").get_attribute("type") == "password"
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            assert context.request.post(url).status == 204
+            assert len(calls) == 1 and calls[0]["Authorization"] == "Bearer destination-private"
+            assert "X-Webhook-Token" not in calls[0]
+            Path("test-results").mkdir(exist_ok=True)
+            page.screenshot(path="test-results/wizard-mobile.png", full_page=True)
+            assert not errors
+            browser.close()
+    finally:
+        upstream.shutdown()
+        upstream.server_close()
+        thread.join(timeout=5)
+
+
+def test_dynamic_template_and_dockhand_wizard(server):
+    import json
+
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        context = browser.new_context(viewport={"width": 1440, "height": 1000})
+        wizard_login(context, server)
+        page = context.new_page()
+        page.goto(server + "/app/templates")
+        page.get_by_label("Name", exact=True).fill("My deployment")
+        page.get_by_label("Input fields (JSON array)").fill(
+            json.dumps(
+                [
+                    {"key": "url", "label": "Custom URL", "kind": "url"},
+                    {"key": "credential", "label": "Custom token", "kind": "secret"},
+                ]
+            )
+        )
+        page.get_by_label("Destination mapping (JSON object)").fill(
+            json.dumps(
+                {
+                    "method": "PUT",
+                    "url": "{{inputs.url}}",
+                    "headers": [{"name": "X-Custom", "value": "{{inputs.credential}}"}],
+                }
+            )
+        )
+        page.get_by_role("button", name="Save template", exact=True).click()
+        page.get_by_role("status").filter(has_text="Template saved").wait_for()
+        page.goto(server + "/app/hooks/new")
+        page.get_by_label("Webhook name").fill("Custom call")
+        page.get_by_label("Template", exact=True).select_option(label="My deployment")
+        page.get_by_role("button", name="Continue", exact=True).click()
+        page.get_by_label("Custom URL").fill("http://destination:8000/run")
+        page.get_by_label("Custom token").fill("custom-private")
+        page.get_by_role("button", name="Continue", exact=True).click()
+        page.locator("#wizard-destination").filter(has_text="PUT").wait_for()
+        assert "custom-private" not in page.locator("#wizard-preview").text_content()
+        page.get_by_role("button", name="Create webhook", exact=True).click()
+        page.locator("#wizard-result").wait_for(state="visible")
+        assert "X-Webhook-Token:" in page.get_by_label("Ready-to-use curl").input_value()
+        page.goto(server + "/app/hooks/new")
+        page.get_by_label("Webhook name").fill("Deploy stack")
+        page.get_by_label("Template", exact=True).select_option("dockhand-redeploy")
+        page.get_by_role("button", name="Continue", exact=True).click()
+        page.get_by_label("Dockhand URL", exact=True).fill("http://dockhand:3000")
+        page.get_by_label("Stack name").fill("myapp")
+        page.get_by_label("Environment ID (optional)").fill("2")
+        page.get_by_label("Dockhand API token").fill("dh_private")
+        page.get_by_role("button", name="Continue", exact=True).click()
+        page.locator("#wizard-destination").filter(
+            has_text="/api/stacks/myapp/deploy?env=2"
+        ).wait_for()
+        preview = page.locator("#wizard-preview").text_content()
+        assert "dh_private" not in preview and "forceRecreate" in preview
+        Path("test-results").mkdir(exist_ok=True)
+        page.screenshot(path="test-results/wizard-desktop.png", full_page=True)
+        page.get_by_role("button", name="Create webhook", exact=True).click()
+        page.locator("#wizard-result").wait_for(state="visible")
+        hooks = context.request.get(server + "/api/hooks").json()
+        assert len(hooks) == 2
+        hook = next(hook for hook in hooks if hook["name"] == "Deploy stack")
+        assert hook["timeout_seconds"] == 300 and hook["target"]["headers"][0]["secret"]
+        assert context.request.get(server + "/api/executions").json()["total"] == 0
+        browser.close()

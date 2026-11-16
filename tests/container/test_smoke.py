@@ -118,6 +118,30 @@ def test_container_roundtrip_restart_backup_and_recovery(tmp_path):
                 client.headers["X-CSRF-Token"] = response.json()["csrf_token"]
 
             login()
+            assert {item["id"] for item in client.get("/api/templates").json()} == {
+                "simple-http-url",
+                "dockhand-redeploy",
+            }
+            definition = client.get("/api/templates/simple-http-url").json()
+            definition.pop("id")
+            definition["name"] = "Persistent custom template"
+            template_response = client.post("/api/templates", json=definition)
+            assert template_response.status_code == 201, template_response.text
+            template_id = template_response.json()["id"]
+            wizard_hook = client.post(
+                "/api/templates/" + template_id + "/hooks",
+                json={"name": "Wizard container", "values": {"url": "http://upstream:8000/wizard"}},
+            )
+            assert wizard_hook.status_code == 201, wizard_hook.text
+            wizard_hook = wizard_hook.json()
+            assert client.get("/api/executions").json()["total"] == 0
+            assert (
+                client.post(
+                    wizard_hook["hook"]["input_path"],
+                    headers={"X-Webhook-Token": wizard_hook["token"]},
+                ).json()["path"]
+                == "/wizard"
+            )
             user = client.post(
                 "/api/users", json={"username": "persisted", "password": "member-password"}
             )
@@ -170,6 +194,9 @@ def test_container_roundtrip_restart_backup_and_recovery(tmp_path):
             client.base_url = url
             wait_ready(url)
             login()
+            assert client.get("/api/templates/" + template_id).status_code == 200
+            assert len(client.get("/api/templates").json()) == 3
+            assert client.get("/api/hooks/" + wizard_hook["id"]).status_code == 200
             assert client.get("/api/hooks/" + hid).status_code == 200
             assert client.get("/api/executions/" + rid).status_code == 200
             logs = docker("logs", app)
@@ -244,6 +271,8 @@ def test_container_roundtrip_restart_backup_and_recovery(tmp_path):
             )
             assert response.status_code == 200
             assert restored.get("/api/hooks/" + hid).status_code == 200
+            assert restored.get("/api/templates/" + template_id).status_code == 200
+            assert restored.get("/api/hooks/" + wizard_hook["id"]).status_code == 200
             assert restored.get("/api/executions/" + rid).status_code == 200
         docker("rm", "-f", "-v", app)
         # Fresh DB must refuse to start without the initial password.

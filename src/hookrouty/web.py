@@ -28,13 +28,16 @@ async def page(request: Request, path: str):
         return RedirectResponse("/login", status_code=303)
     hook, rid = None, None
     parts = path.split("/")
-    if path == "users":
+    if path == "templates":
+        require_admin(actor)
+        view = "templates"
+    elif path == "users":
         require_admin(actor)
         view = "users"
     elif path in {"hooks", "executions", "profile"}:
         view = path
     elif path == "hooks/new":
-        view = "editor"
+        view = "editor" if request.query_params.get("mode") == "advanced" else "wizard"
     elif len(parts) == 3 and parts[0] == "hooks" and parts[2] in {"edit", "test"}:
         row = await require_hook_access(request.app.state.db, actor, parts[1])
         hook = safe_hook(row, request.app.state.box)

@@ -41,6 +41,10 @@ CSRF protection also applies to login. Authentication failures are generic. Five
 
 Hook and history operations return 404 to unassigned members. Administrator operations return 403 to members. API access without an authenticated session returns 401. New resources return 201; logout/delete/password operations return 204. Invalid input returns 400. Route/username conflicts and last-admin protection return 409.
 
+## Webhook setup templates
+
+The session-protected `/templates` endpoints list definitions, provide administrator CRUD and compile wizard inputs into previews or ordinary hooks. See the complete [template API and schemas](webhook-templates.md#api). Creation uses the same access, encryption and token rules as POST `/hooks`; previews do not contact destinations or record executions.
+
 ## HookSpec
 
 ```json

@@ -1,5 +1,13 @@
 # Implementation status
 
+## Template wizard update — 16 November 2026
+
+The application now supports a three-step creation wizard backed by administrator-managed SQLite templates, seeded once with Simple HTTP URL and asynchronous Dockhand redeploy. The advanced editor remains available. Definitions can be added, copied, edited, disabled and deleted without rebuilding the image; existing hooks are independent materialized configurations. See [webhook setup templates](webhook-templates.md).
+
+Verification: Ruff lint and formatting passed (45 Python files); full suite including Chromium and amd64 Docker passed **105 tests in 42.52 seconds**; separate arm64 Docker smoke passed **1 test in 41.20 seconds**. Compose validation and a local amd64/arm64 build passed. Container checks include template-created real calls and definition/hook persistence through restart and backup/restore. Migration coverage opens a version-1 database and retains existing data. One independent read-only review identified two credential-handling gaps; both were reproduced with failing tests and fixed before these final checks.
+
+The repository and verified GHCR publishing workflow are now configured at `Unlink/Hookrouty`; older statements below about an absent remote/publication describe the initial implementation snapshot.
+
 This file records the initial delivery. See [security remediation](security-remediation.md) for the current fixes and verification on 12 November 2026.
 
 Source specification: [implementation-plan.md](implementation-plan.md). The supplied source content is preserved; trailing whitespace is normalized. All authored UI, code and documentation are English. Verification date: 11 November 2026.

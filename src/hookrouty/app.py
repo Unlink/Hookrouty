@@ -25,6 +25,7 @@ from .models import IncomingRequest, RouterError
 from .proxy import ProxyService
 from .routing import compile_route, resolve_route
 from .security import SecretBox, now, token_digest
+from .wizard import seed_templates
 
 
 class RequestIdMiddleware:
@@ -99,6 +100,7 @@ def create_app(settings: Settings | None = None):
                 "INSERT OR IGNORE INTO app_meta VALUES('key_check',?)", (state.box.fingerprint,)
             )
             await bootstrap_admin(state.db, settings)
+            await seed_templates(state.db)
             state.limiter = LoginLimiter()
             state.http = httpx.AsyncClient(
                 follow_redirects=False,

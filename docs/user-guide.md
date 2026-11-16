@@ -6,6 +6,12 @@ Administrators manage accounts in **Users**: create a username/password, choose 
 
 A member can create hooks and automatically receives access. Assigned members can edit, enable/disable, duplicate, test, rotate tokens and delete their hooks. Administrators can change assignments in the hook editor. Removing an assignment takes effect on the next operation and also removes access to historical records. Deleted hooks retain only a tombstone and memberships for access to retained history; active configuration, token hash and encrypted fields are removed.
 
+## Quick setup and reusable templates
+
+**Create hook** opens a three-step wizard: choose a template, fill the destination fields, then review and create. The built-ins cover Simple HTTP URL and Dockhand redeploy. Copy the resulting URL, one-time token or curl; creation sends no destination request. Incoming POST and header authentication are defaults, with an optional secret URL. **Advanced editor** retains the complete configuration.
+
+Administrators manage dynamic definitions in **Templates**. Members can use enabled templates; changes to a definition do not change existing hooks. See [webhook setup templates](webhook-templates.md) for the field schema, secret handling, custom examples and Dockhand deployment behavior.
+
 ## Incoming routes
 
 Public endpoints live under `/hooks/`; administration lives under `/app/` and `/api/`. A public `GET /hooks/new` is independent of the editor `/app/hooks/new`.
