@@ -60,6 +60,7 @@ async function wizard() {
     $("#created-curl").value = "curl --fail-with-body -X POST " + shellQuote(url) + (hook.auth.mode === "header" ? " -H " + shellQuote("X-Webhook-Token: " + token) : "");
     $("#created-test").href = "/app/hooks/" + created.id + "/test";
     $("#created-edit").href = "/app/hooks/" + created.id + "/edit";
+    $("#created-usage").href = "/app/hooks/" + created.id + "/curl";
     for (const input of $$("input[type=password]", form)) input.value = "";
     form.hidden = true; $(".wizard-progress").hidden = true; $("#wizard-result").hidden = false;
     notice(hook.enabled ? "Webhook created and enabled. No destination request was sent." : "Webhook created and disabled. No destination request was sent.");

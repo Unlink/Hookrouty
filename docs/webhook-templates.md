@@ -11,7 +11,7 @@ The **Create hook** wizard builds an ordinary Hookrouty hook from a reusable def
 
 Preview and creation never contact the destination or create an execution record. Created hooks use incoming POST, body capture off, normal per-hook access and encrypted destination secrets. They are enabled by default; uncheck the switch during review to create a disabled hook. The creator receives access automatically. Use **Advanced settings** after creation for request-dependent templates, another incoming method, body capture or assignments. The complete editor is also available through **Advanced editor** before creation.
 
-Copy buttons support browsers with clipboard access and provide a selection-based fallback. Keep copied tokens and URLs containing tokens private. Configure `APP_URL` to the public address used by callers so the generated URLs are correct. After leaving the result, use token rotation if you did not save the token.
+Copy buttons support browsers with clipboard access and provide a selection-based fallback. Keep copied tokens and URLs containing tokens private. Configure `APP_URL` to the public address used by callers so the generated URLs are correct. After leaving the result, open **cURL** from the hook list/editor/test page to generate a fresh example from the saved settings. Paste your saved incoming token; if it is lost, the page offers explicit confirmed rotation. See [copying commands after editing](user-guide.md#copy-a-curl-command-after-editing).
 
 ## Built-in templates
 

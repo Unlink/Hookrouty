@@ -134,6 +134,10 @@ def test_container_roundtrip_restart_backup_and_recovery(tmp_path):
             )
             assert wizard_hook.status_code == 201, wizard_hook.text
             wizard_hook = wizard_hook.json()
+            curl_page = client.get("/app/hooks/" + wizard_hook["id"] + "/curl")
+            assert curl_page.status_code == 200 and "curl-command" in curl_page.text
+            assert wizard_hook["token"] not in curl_page.text
+            assert client.get("/static/curl.js").status_code == 200
             assert client.get("/api/executions").json()["total"] == 0
             assert (
                 client.post(

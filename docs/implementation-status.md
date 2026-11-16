@@ -1,5 +1,11 @@
 # Implementation status
 
+## Saved-hook curl page — 16 November 2026
+
+Saved hooks now offer a **cURL** page from list actions, the editor, the test page and the wizard result. It builds incoming commands with current settings, path parameters, optional JSON and either token location. Existing tokens remain hash-only; users can paste a saved incoming token or explicitly confirm a replacement. Examples are generated locally without calling the destination or persisting pasted credentials. See [the user guide](user-guide.md#copy-a-curl-command-after-editing).
+
+Verification: **106 unit/browser tests passed**, plus the container smoke test passed separately on **amd64 and arm64**. The browser runs an actual generated command against a local destination, covers clipboard fallback and token rotation, and checks narrow layout. Ruff lint/format, multi-platform Docker build, Compose and UTF-8 validation passed. One independent read-only review reported no important issue.
+
 ## Template wizard update — 16 November 2026
 
 The application now supports a three-step creation wizard backed by administrator-managed SQLite templates, seeded once with Simple HTTP URL and asynchronous Dockhand redeploy. The advanced editor remains available. Definitions can be added, copied, edited, disabled and deleted without rebuilding the image; existing hooks are independent materialized configurations. See [webhook setup templates](webhook-templates.md).

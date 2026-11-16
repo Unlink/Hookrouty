@@ -22,6 +22,14 @@ Paths are decoded exactly once. Encoded slash, backslash, NUL, invalid UTF-8 and
 
 Each hook requires a token, independent of login cookies. Use `X-Webhook-Token` or select the query parameter `token`. Header authentication avoids putting credentials in URLs. A random 256-bit token is generated unless a custom nonempty token is supplied. Copy generated tokens at creation/rotation: only their hashes are stored. Rotating a token invalidates the previous one immediately. Duplicating a hook requires a new route, generates a new token and leaves the copy disabled.
 
+## Copy a curl command after editing
+
+Choose **cURL** in the hook list, editor or test page to open the saved hook's command page. It uses the current incoming method, route, authentication mode and configured APP_URL. Fill any path parameters, paste your saved **incoming webhook token** and optionally add a JSON request body. Copy the URL or curl command. The command uses POSIX shell syntax for bash, sh or zsh; running it performs the real action. Opening the page, changing its fields and copying never call the destination.
+
+Without a token the example contains `REPLACE_WITH_WEBHOOK_TOKEN`. Existing tokens are hash-only and cannot be retrieved after creation; they are different from destination credentials such as a Dockhand API token. Pasted tokens stay in page memory, are not sent to the management API or stored in browser storage, and clear when leaving. Header authentication puts the token in `X-Webhook-Token`; query authentication embeds it in the URL. Keep copied values private. Clipboard selection fallback supports browsers without clipboard access.
+
+If the token is lost, expand **Lost your webhook token?** and select **Generate new token**. Confirming immediately invalidates the old token and fills the new token into the command. Copy and save it before leaving; every existing caller must be updated. No automatic rotation occurs on page load. Disabled hooks show a warning and must be enabled before their public URL can be called. HEAD examples use `--head`; GET/HEAD examples omit request bodies. No redirect following or automatic retry is added.
+
 ## Destination and templates
 
 Choose an independent target method and HTTP(S) URL. Internal LAN/Docker addresses are allowed. Scheme, hostname and port are fixed configuration. Userinfo and URL fragments are forbidden. Templates belong in the URL path, separately configured query values, header values and bodies. Query fields preserve order; existing fixed URL query parameters remain before the configured fields. Header names are unique ignoring case. Host, Content-Length and hop-by-hop headers are reserved.

@@ -48,7 +48,7 @@ async function loadHooks() {
     const target = node("td"); target.append(node("code", h.target.method + " " + h.target.url));
     const status = node("td"); status.append(badge(h.enabled ? "enabled" : "disabled"));
     const controls = node("td"); const buttons = node("div", undefined, "row");
-    buttons.append(link("Edit", "/app/hooks/" + h.id + "/edit"), link("Test", "/app/hooks/" + h.id + "/test"),
+    buttons.append(link("Edit", "/app/hooks/" + h.id + "/edit"), link("Test", "/app/hooks/" + h.id + "/test"), link("cURL", "/app/hooks/" + h.id + "/curl"),
       action(h.enabled ? "Disable" : "Enable", async () => {await api("/hooks/"+h.id,{method:"PATCH",body:{enabled:!h.enabled}}); await loadHooks();}),
       action("Duplicate", async () => {const path = prompt("New input path", h.input_path + "-copy"); if (!path) return; const result=await api("/hooks/"+h.id+"/duplicate",{method:"POST",body:{input_path:path}}); notice("Disabled copy created. Store this token now; it will not be shown again:\n"+result.token); await loadHooks();}),
       action("Rotate token", async () => {if (!confirm("Replace this hook's token? Existing callers must use the new token.")) return; const result=await api("/hooks/"+h.id+"/rotate-token",{method:"POST",body:{}}); notice("Store the new token now:\n"+result.token);}),
@@ -158,6 +158,7 @@ run(async()=>{
   bindForm("#login-form",async(form,data)=>{await api("/login",{method:"POST",body:data});location.assign("/app/hooks");});
   bindForm("#password-form",async(form,data)=>{await api("/me/password",{method:"POST",body:data});location.assign("/login");});
   if(page==="wizard")await wizard();if(page==="templates")await templateAdmin();
+  if(page==="curl")curlPage();
   if(page==="hooks")await loadHooks();if(page==="editor")await editor();if(page==="test")await testPage();if(page==="executions")await activity();if(page==="users")await usersPage();
   if(page==="detail"){const result=await api("/executions/"+document.body.dataset.executionId);$("#execution-detail").textContent=JSON.stringify(result,null,2);$("#uncertain").hidden=!result.uncertain_result;}
 });

@@ -38,10 +38,10 @@ async def page(request: Request, path: str):
         view = path
     elif path == "hooks/new":
         view = "editor" if request.query_params.get("mode") == "advanced" else "wizard"
-    elif len(parts) == 3 and parts[0] == "hooks" and parts[2] in {"edit", "test"}:
+    elif len(parts) == 3 and parts[0] == "hooks" and parts[2] in {"edit", "test", "curl"}:
         row = await require_hook_access(request.app.state.db, actor, parts[1])
         hook = safe_hook(row, request.app.state.box)
-        view = "editor" if parts[2] == "edit" else "test"
+        view = "editor" if parts[2] == "edit" else parts[2]
     elif len(parts) == 2 and parts[0] == "executions":
         await request.app.state.history.detail(actor, parts[1])
         view, rid = "detail", parts[1]

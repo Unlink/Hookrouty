@@ -6,6 +6,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 import pytest
@@ -201,6 +202,7 @@ def wizard_login(context, server):
         data={"username": "admin", "password": "initial-password"},
     )
     assert signed.ok
+    return signed.json()["csrf_token"]
 
 
 def test_simple_wizard_copy_and_real_call(server):
@@ -351,3 +353,149 @@ def test_dynamic_template_and_dockhand_wizard(server):
         assert hook["timeout_seconds"] == 300 and hook["target"]["headers"][0]["secret"]
         assert context.request.get(server + "/api/executions").json()["total"] == 0
         browser.close()
+
+
+def test_saved_hook_curl_page_roundtrip_and_rotation(server):
+    import json
+    import shlex
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from playwright.sync_api import sync_playwright
+
+    calls = []
+
+    class Destination(BaseHTTPRequestHandler):
+        def do_PATCH(self):
+            calls.append((self.path, self.rfile.read(int(self.headers.get("Content-Length", "0")))))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"called")
+
+        def log_message(self, *args):
+            pass
+
+    upstream = ThreadingHTTPServer(("127.0.0.1", 0), Destination)
+    thread = threading.Thread(target=upstream.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            context = browser.new_context(
+                viewport={"width": 390, "height": 844},
+                permissions=["clipboard-read", "clipboard-write"],
+            )
+            csrf = wizard_login(context, server)
+            headers = {"X-CSRF-Token": csrf}
+            secret = "token'&$()private"
+            created = context.request.post(
+                server + "/api/hooks",
+                headers=headers,
+                data={
+                    "name": "Saved command",
+                    "enabled": True,
+                    "input_method": "PATCH",
+                    "input_path": "/hooks/use/:project",
+                    "auth": {"mode": "query", "token": secret},
+                    "target": {
+                        "method": "PATCH",
+                        "url": "http://127.0.0.1:"
+                        + str(upstream.server_port)
+                        + "/{{path.project}}",
+                        "body": {"mode": "passthrough"},
+                    },
+                },
+            ).json()
+            hid = created["id"]
+            page = context.new_page()
+            page.goto(server + "/app/hooks/" + hid + "/edit")
+            page.get_by_role("link", name="cURL", exact=True).click()
+            page.wait_for_function(
+                "document.querySelector('#curl-command').value.includes('REPLACE_WITH_WEBHOOK_TOKEN')"
+            )
+            assert (
+                "REPLACE_WITH_WEBHOOK_TOKEN"
+                in page.get_by_label("curl command", exact=True).input_value()
+            )
+            page.get_by_label("Path parameter: project", exact=True).fill("O'Reilly & cafe")
+            page.get_by_label("Webhook token", exact=True).fill(secret)
+            body = json.dumps({"message": "O'Reilly $() and new\nline"})
+            page.get_by_label("Request body (optional JSON)", exact=True).fill(body)
+            command = page.get_by_label("curl command", exact=True).input_value()
+            assert "--request PATCH" in command and "--data-binary" in command
+            assert not calls
+            assert context.request.get(server + "/api/executions").json()["total"] == 0
+            page.get_by_role("button", name="Copy curl", exact=True).click()
+            page.get_by_role("status").filter(has_text="Copied").wait_for()
+            assert page.evaluate("navigator.clipboard.readText()") == command
+            result = subprocess.run(
+                shlex.split(command.replace("\\\n", "")), capture_output=True, text=True, timeout=10
+            )
+            assert result.returncode == 0, result.stderr
+            assert result.stdout == "called" and len(calls) == 1
+            assert (
+                calls[0][0] == "/O'Reilly%20%26%20cafe" or calls[0][0] == "/O%27Reilly%20%26%20cafe"
+            )
+            assert json.loads(calls[0][1]) == json.loads(body)
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            assert page.evaluate("localStorage.length + sessionStorage.length") == 0
+            page.reload()
+            page.wait_for_function(
+                "document.querySelector('#curl-command').value.includes('REPLACE_WITH_WEBHOOK_TOKEN')"
+            )
+            assert page.get_by_label("Webhook token", exact=True).input_value() == ""
+            assert secret not in page.get_by_label("curl command", exact=True).input_value()
+            page.get_by_text("Lost your webhook token?", exact=True).click()
+            # Cancelled rotation must keep the existing credential valid.
+            page.once("dialog", lambda dialog: dialog.dismiss())
+            page.get_by_role("button", name="Generate new token", exact=True).click()
+            assert (
+                context.request.patch(
+                    server + "/hooks/use/test?token=" + quote(secret, safe="")
+                ).status
+                == 200
+            )
+            page.once("dialog", lambda dialog: dialog.accept())
+            page.get_by_role("button", name="Generate new token", exact=True).click()
+            page.get_by_role("status").filter(has_text="Previous token no longer works").wait_for()
+            replacement = page.get_by_label("Webhook token", exact=True).input_value()
+            assert replacement and replacement != secret
+            assert (
+                context.request.patch(
+                    server + "/hooks/use/test?token=" + quote(secret, safe="")
+                ).status
+                == 401
+            )
+            # Header auth and HEAD use the current saved configuration after navigation.
+            assert context.request.patch(
+                server + "/api/hooks/" + hid,
+                headers=headers,
+                data={"input_method": "HEAD", "auth": {"mode": "header"}},
+            ).ok
+            page.reload()
+            page.wait_for_function(
+                "document.querySelector('#curl-command').value.includes('--head')"
+            )
+            page.get_by_label("Webhook token", exact=True).fill(replacement)
+            head = page.get_by_label("curl command", exact=True).input_value()
+            assert "--head" in head and "--data-binary" not in head
+            assert "X-Webhook-Token: " + replacement in head and "?token=" not in head
+            assert not page.get_by_label("Request body (optional JSON)").is_visible()
+            page.evaluate(
+                "window.savedClipboard = navigator.clipboard; Object.defineProperty(navigator, 'clipboard', {value: undefined, configurable: true})"
+            )
+            page.get_by_role("button", name="Copy curl", exact=True).click()
+            page.get_by_role("status").filter(has_text="Copied").wait_for()
+            assert page.evaluate("window.savedClipboard.readText()") == head
+            page.get_by_label("Path parameter: project", exact=True).fill("invalid/segment")
+            assert page.get_by_role("button", name="Copy curl", exact=True).is_disabled()
+            page.get_by_label("Path parameter: project", exact=True).fill("example")
+            Path("test-results").mkdir(exist_ok=True)
+            page.screenshot(path="test-results/curl-mobile.png", full_page=True)
+            page.goto(server + "/app/hooks")
+            page.get_by_role("link", name="cURL", exact=True).wait_for()
+            browser.close()
+    finally:
+        upstream.shutdown()
+        upstream.server_close()
+        thread.join(timeout=5)

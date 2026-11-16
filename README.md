@@ -43,6 +43,8 @@ Select **Hooks → Create hook**, enter a name and choose **Simple HTTP URL** or
 
 Administrators can add, copy, edit, disable and delete reusable definitions under **Templates**, without rebuilding the container. Existing hooks remain independent of template changes. See [webhook setup templates](docs/webhook-templates.md). The full editor remains available through **Advanced editor**.
 
+Return to **cURL** from any saved hook's list actions, editor or test page to copy a command after editing. Paste your saved incoming token, or explicitly generate a replacement if it was lost. Existing tokens cannot be retrieved. See [command examples and token replacement](docs/user-guide.md#copy-a-curl-command-after-editing).
+
 ## Advanced webhook example
 
 1. In **Users**, an administrator can create accounts. In **Hooks**, any signed-in user can create a hook; its creator receives access automatically.

@@ -1,0 +1,18 @@
+<div class="page-heading"><div><div class="eyebrow">CALL YOUR WEBHOOK</div><h1>{{ hook.name }}</h1><p class="muted">Build and copy a curl command whenever you need it.</p></div><div class="row"><a href="/app/hooks/{{ hook.id }}/edit">Edit configuration</a><a href="/app/hooks/{{ hook.id }}/test">Preview &amp; test</a><a href="/app/hooks">Back to hooks</a></div></div>
+<section class="card wizard-card">
+<h2>Webhook command</h2>
+{% if not hook.enabled %}<p class="warning">This webhook is disabled. Enable it in its settings before calling the public URL.</p>{% endif %}
+<p class="muted">This command calls your incoming webhook. Copying or editing it sends no request.</p>
+<form id="curl-form" autocomplete="off">
+<div id="curl-path-fields"></div>
+<label>Webhook token<input id="curl-token" type="password" maxlength="4096" autocomplete="new-password" placeholder="Paste your saved incoming webhook token"></label>
+<p class="hint">Existing tokens cannot be retrieved. Paste the token you saved when creating the hook, or generate a replacement below. This is the incoming Hookrouty token, not a destination API token. Your input stays on this page and is cleared when you leave.</p>
+<div id="curl-body-field" {% if hook.input_method in ['GET','HEAD'] %}hidden{% endif %}><label>Request body (optional JSON)<textarea id="curl-body" rows="4" class="code" placeholder='{"example":true}'></textarea></label><p class="hint">Only add a body if your webhook needs one. Match any fields used by its destination mapping.</p></div>
+<p id="curl-validation" class="warning" role="status" hidden></p>
+<label>Webhook URL<input id="curl-url" readonly></label><button type="button" class="quiet" id="curl-copy-url">Copy URL</button>
+<p id="curl-url-hint" class="hint"></p>
+<label>curl command<textarea id="curl-command" rows="6" class="code" readonly></textarea></label><button type="button" class="quiet" id="curl-copy-command">Copy curl</button>
+<p class="hint">POSIX shell syntax (bash, sh or zsh). A missing token is shown as REPLACE_WITH_WEBHOOK_TOKEN. The command and a query-authenticated URL contain your token when supplied; keep copied values private. Running the command performs the real action. No redirects or retries are followed automatically.</p>
+</form>
+<details><summary>Lost your webhook token?</summary><p class="muted">A new token immediately invalidates the previous token. Update every existing caller after replacing it. Generating a token does not call the destination.</p><button type="button" class="danger" id="curl-rotate">Generate new token</button></details>
+</section>
